@@ -28,6 +28,8 @@ services:
       - REDIS_HOST=redis
     env_file:
       - db.env
+    networks:
+      - proxy-tier
     depends_on:
       - db
       - redis

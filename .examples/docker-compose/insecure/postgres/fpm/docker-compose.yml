@@ -23,6 +23,8 @@ services:
       - REDIS_HOST=redis
     env_file:
       - db.env
+    networks:
+      - proxy-tier
     depends_on:
       - db
       - redis
@@ -34,6 +36,8 @@ services:
       - 127.0.0.1:8080:80
     volumes:
       - nextcloud:/var/www/html:z,ro
+    networks:
+      - proxy-tier
     depends_on:
       - app
 
@@ -50,3 +54,6 @@ services:
 volumes:
   db:
   nextcloud:
+  
+networks:
+  proxy-tier:
