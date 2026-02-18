@@ -1,8 +1,5 @@
 # DO NOT EDIT: created by update.sh from Dockerfile-debian.template
-FROM php:8.3-apache-bookworm
-
-# Define the commit hash for imagick as a variable
-ENV IMAGICK_COMMIT_HASH d7d3c24af1b4f599897408f1714600b69a56473b
+FROM php:8.3-apache-trixie
 
 # entrypoint.sh and cron.sh dependencies
 RUN set -ex; \
@@ -12,10 +9,10 @@ RUN set -ex; \
         busybox-static \
         bzip2 \
         libldap-common \
-        libmagickcore-6.q16-6-extra \
+        libmagickcore-7.q16-10-extra \
         rsync \
     ; \
-    rm -rf /var/lib/apt/lists/*; \
+    apt-get dist-clean; \
     \
     mkdir -p /var/spool/cron/crontabs; \
     echo '*/5 * * * * php -f /var/www/html/cron.php' > /var/spool/cron/crontabs/www-data
@@ -38,8 +35,8 @@ RUN set -ex; \
         libicu-dev \
         libjpeg-dev \
         libldap2-dev \
+        liblz4-dev \
         libmagickwand-dev \
-        libmcrypt-dev \
         libmemcached-dev \
         libpng-dev \
         libpq-dev \
@@ -60,7 +57,6 @@ RUN set -ex; \
         gmp \
         intl \
         ldap \
-        opcache \
         pcntl \
         pdo_mysql \
         pdo_pgsql \
@@ -68,27 +64,14 @@ RUN set -ex; \
         zip \
     ; \
     \
-# The master version on the imagick repository is compatible with PHP 8.3. However, the PECL version is not updated yet.
-# As soon as it will get updated, we can switch back to the PECL version, instead of having this workaround.
-    curl -fsSL -o imagick.tar.gz "https://github.com/Imagick/imagick/archive/$IMAGICK_COMMIT_HASH.tar.gz"; \
-    tar -xzf imagick.tar.gz -C /tmp; \
-    rm imagick.tar.gz; \
-    cd "/tmp/imagick-$IMAGICK_COMMIT_HASH"; \
-    sed -i "s/@PACKAGE_VERSION@/git-$(echo ${IMAGICK_COMMIT_HASH} | cut -c 1-7)/" php_imagick.h; \
-    phpize; \
-    ./configure; \
-    make; \
-    make install; \
-    cd; \
-    rm -r "/tmp/imagick-$IMAGICK_COMMIT_HASH"; \
-    \
 # pecl will claim success even if one install fails, so we need to perform each install separately
-    pecl install APCu-5.1.24; \
+    pecl install APCu-5.1.28; \
     pecl install igbinary-3.2.16; \
-    pecl install memcached-3.3.0 \
-        --configureoptions 'enable-memcached-igbinary="yes"'; \
-    pecl install redis-6.2.0 \
-        --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"'; \
+    pecl install imagick-3.8.1; \
+    pecl install --configureoptions 'enable-memcached-igbinary="yes"' \
+        memcached-3.4.0; \
+    pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-zstd="yes" enable-redis-lz4="yes"' \
+        redis-6.3.0; \
     \
     docker-php-ext-enable \
         apcu \
@@ -105,13 +88,14 @@ RUN set -ex; \
     ldd "$(php -r 'echo ini_get("extension_dir");')"/*.so \
         | awk '/=>/ { so = $(NF-1); if (index(so, "/usr/local/") == 1) { next }; gsub("^/(usr/)?", "", so); print so }' \
         | sort -u \
-        | xargs -r dpkg-query --search \
-        | cut -d: -f1 \
+        | xargs -rt dpkg-query --search \
+# https://manpages.debian.org/trixie/dpkg/dpkg-query.1.en.html#S (we ignore diversions and it'll be really unusual for more than one package to provide any given .so file)
+        | awk 'sub(":$", "", $1) { print $1 }' \
         | sort -u \
         | xargs -rt apt-mark manual; \
     \
     apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false; \
-    rm -rf /var/lib/apt/lists/*
+    apt-get dist-clean
 
 # set recommended PHP.ini settings
 # see https://docs.nextcloud.com/server/latest/admin_manual/installation/server_tuning.html#enable-php-opcache
@@ -166,7 +150,7 @@ RUN { \
     } > /etc/apache2/conf-available/apache-limits.conf; \
     a2enconf apache-limits
 
-ENV NEXTCLOUD_VERSION 31.0.3
+ENV NEXTCLOUD_VERSION 31.0.14
 
 RUN set -ex; \
     fetchDeps=" \
@@ -176,8 +160,8 @@ RUN set -ex; \
     apt-get update; \
     apt-get install -y --no-install-recommends $fetchDeps; \
     \
-    curl -fsSL -o nextcloud.tar.bz2 "https://download.nextcloud.com/server/releases/nextcloud-31.0.3.tar.bz2"; \
-    curl -fsSL -o nextcloud.tar.bz2.asc "https://download.nextcloud.com/server/releases/nextcloud-31.0.3.tar.bz2.asc"; \
+    curl -fsSL -o nextcloud.tar.bz2 "https://github.com/nextcloud-releases/server/releases/download/v31.0.14/nextcloud-31.0.14.tar.bz2"; \
+    curl -fsSL -o nextcloud.tar.bz2.asc "https://github.com/nextcloud-releases/server/releases/download/v31.0.14/nextcloud-31.0.14.tar.bz2.asc"; \
     export GNUPGHOME="$(mktemp -d)"; \
 # gpg key from https://nextcloud.com/nextcloud.asc
     gpg --batch --keyserver keyserver.ubuntu.com --recv-keys 28806A878AE423A28372792ED75899B9A724937A; \
@@ -191,7 +175,7 @@ RUN set -ex; \
     chmod +x /usr/src/nextcloud/occ; \
     \
     apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false $fetchDeps; \
-    rm -rf /var/lib/apt/lists/*
+    apt-get dist-clean
 
 COPY *.sh upgrade.exclude /
 COPY config/* /usr/src/nextcloud/config/

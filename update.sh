@@ -2,16 +2,15 @@
 set -eo pipefail
 
 declare -A alpine_version=(
-	[default]='3.21'
+	[default]='3.23'
 )
 
 declare -A debian_version=(
-	[default]='bookworm'
+	[default]='trixie'
 )
 
 declare -A php_version=(
-	[default]='8.2'
-	[31]='8.3'
+	[default]='8.3'
 )
 
 declare -A cmd=(
@@ -55,7 +54,7 @@ igbinary_version="$(
 )"
 
 imagick_version="$(
-	git ls-remote --tags https://github.com/mkoppanen/imagick.git \
+	git ls-remote --tags https://github.com/imagick/imagick.git \
 		| cut -d/ -f3 \
 		| grep -viE '[a-z]' \
 		| tr -d '^{}' \
@@ -95,7 +94,7 @@ variants=(
 	fpm-alpine
 )
 
-min_version='29'
+min_version='31'
 
 # version_greater_or_equal A B returns whether A >= B
 function version_greater_or_equal() {
@@ -108,8 +107,8 @@ function create_variant() {
 	debianVersion=${debian_version[$version]-${debian_version[default]}}
 	phpVersion=${php_version[$version]-${php_version[default]}}
 	crontabInt=${crontab_int[$version]-${crontab_int[default]}}
-	url="https://download.nextcloud.com/server/releases/nextcloud-$fullversion.tar.bz2"
-	ascUrl="https://download.nextcloud.com/server/releases/nextcloud-$fullversion.tar.bz2.asc"
+	url="https://github.com/nextcloud-releases/server/releases/download/v$fullversion/nextcloud-$fullversion.tar.bz2"
+	ascUrl="https://github.com/nextcloud-releases/server/releases/download/v$fullversion/nextcloud-$fullversion.tar.bz2.asc"
 
 	# Create the version+variant directory with a Dockerfile.
 	mkdir -p "$dir"
